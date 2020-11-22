@@ -37,7 +37,8 @@ class Crawler:
         return authorLinks
 
     def getAllCitedByBaseLinks(self):
-        page = requests.get("https://scholar.google.com/citations?user=YMymR_wAAAAJ&hl=en", headers= self.headers)
+        userProfileUrl = "https://scholar.google.com/citations?user=YMymR_wAAAAJ&hl=en"
+        page = self.getPage(userProfileUrl)
         tree = html.fromstring(page.content)
         elements = tree.xpath("//td[contains(@class, 'gsc_a_c')]")
         links = []
@@ -61,7 +62,7 @@ class Crawler:
         return newPages
 
     def getNextCitedByLink(self, pageUrl):
-        page = requests.get(pageUrl, headers= self.headers)
+        page = self.getPage(pageUrl)
         tree = html.fromstring(page.content)
         #element = tree.xpath("//div[@id = 'gs_n']")
         anchors = tree.xpath(".//a")
@@ -72,7 +73,6 @@ class Crawler:
                 for b in bs:
                     if b.text == "Next":
                         link = self.getScholarPageLink(link)
-                        #print(b.text, link)
                         return link
 
     def getScholarPageLink(self, inputLink):
@@ -87,7 +87,7 @@ class Crawler:
         tree = html.fromstring(page.content)
 
     def extract_acm_author_info(self, url):
-        page = requests.get(url)
+        page = self.getPage(url)
         tree = html.fromstring(page.content)
         elements = tree.xpath("//div[contains(@class, 'auth-info')]")
         authors = []
@@ -107,8 +107,9 @@ class Crawler:
 
         return authors
 
-    def extract_ieee_author_info(self):
-        page = requests.get("https://ieeexplore.ieee.org/abstract/document/7965295/authors#authors")
+    def extract_ieee_author_info(self, url):
+        url = url + "/authors#authors"
+        page = self.getPage(url)
         endString = ';\n\n\n\n\txplGlobal.document.snippet="true"'
         startString = 'document.metadata='
         content = page.content.decode("utf-8")
@@ -125,8 +126,8 @@ class Crawler:
             authorList.append(a)
         return authorList
 
-    def extract_springer_author_info(self):
-        page = requests.get("https://link.springer.com/chapter/10.1007/978-3-319-47169-3_41")
+    def extract_springer_author_info(self, url):
+        page = self.getPage(url)
         tree = html.fromstring(page.content)
         authorNames = tree.xpath("//span[contains(@class, 'authors-affiliations__name')]")
         affiliations = tree.xpath("//span[contains(@class, 'affiliation__name')]")
@@ -145,6 +146,12 @@ class Crawler:
             authors.append(author)
 
         return authors
+
+    def getPage(self, url):
+        sleepFor = random.randint(2,7)
+        time.sleep(sleepFor)
+        page = requests.get(url, headers=self.headers)
+        return page
 
 if __name__ == "__main__":
     c = Crawler({})
