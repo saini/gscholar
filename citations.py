@@ -15,12 +15,18 @@ class Author:
     def __init__(self):
         pass
 
+class Publisher:
+    def __init__(self):
+        pass
+
 
 class Crawler:
     def __init__(self, config):
         self.config = config
         self.baseUrl = "https://scholar.google.com"
         self.headers = {"User-Agent":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.82 Safari/537.36"}
+        self.pagesProcessed = 0
+        self.totalPages = 0
 
     def crawl(self):
         page = requests.get('https://scholar.google.com/scholar?oi=bibs&hl=en&cites=1629517509046821994')
@@ -55,9 +61,10 @@ class Crawler:
         newPages = []
         nextPage = basePageUrl
         while nextPage:
-            time.sleep(2)
             nextPage = self.getNextCitedByLink(nextPage)
-            newPages.append(nextPage)
+            if nextPage:
+                print("found: ", nextPage)
+                newPages.append(nextPage)
 
         return newPages
 
@@ -147,30 +154,143 @@ class Crawler:
 
         return authors
 
+    def getAllArticleVersionsUrlsOnPage(self, url):
+        page = self.getPage(url)
+        root = html.fromstring(page.content)
+        links = []
+        anchors = root.xpath(".//a")
+        for anchor in anchors:
+            link = anchor.get("href")
+            if "scholar?cluster" in anchor.get("href"):
+                link = self.getScholarPageLink(link)
+                links.append(link)
+
+        return links
+
+    def getKnownPublisherUrls(self, urls):
+        citedBy = {}
+        for url in urls:
+            page = self.getPage(url)
+            root = html.fromstring(page.content)
+            anchors = root.xpath(".//a")
+            for anchor in anchors:
+                link = anchor.get("href")
+                if "https://dl.acm.org/doi/abs" in link:
+                    publisher = Publisher()
+                    publisher.Name = "acm"
+                    publisher.ArticleUrl = link
+                    citedBy[url] = publisher
+                    break
+                if "https://ieeexplore.ieee.org/" in link:
+                    publisher = Publisher()
+                    publisher.Name = "ieee"
+                    publisher.ArticleUrl = link
+                    citedBy[url] = publisher
+                    break
+                if "https://link.springer.com" in link:
+                    publisher = Publisher()
+                    publisher.Name = "springer"
+                    publisher.ArticleUrl = link
+                    citedBy[url] = publisher
+                    break
+        return citedBy
+
     def getPage(self, url):
         sleepFor = random.randint(2,7)
+        print("sleeping for ", sleepFor, "seconds")
         time.sleep(sleepFor)
         page = requests.get(url, headers=self.headers)
         return page
 
+    def start(self):
+        print("creating authors file")
+        self.createAuthorsFile("Authors.csv")
+
+        print("Getting base pages from profile link")
+        basePages = self.getAllCitedByBaseLinks()
+        print("Number of base pages found ", len (basePages))
+
+        print("getting subsequent pages from every base page")
+        allSubsequentLinks = []
+        for page in basePages:
+            newLinks = self.getAllSubsequentPageLinks(page)
+            if newLinks:
+                print("found more pages: ", len(newLinks))
+                allSubsequentLinks = allSubsequentLinks + newLinks
+
+        allPages = basePages + allSubsequentLinks
+        self.totalPages = len(allPages)
+        print("total pages to scan", len(allPages))
+        self.writeAllPagesToFile("AllPages.txt", allPages)
+
+        # extract get all article version urls from pages
+        for page in allPages:
+            self.writeToStatusFile("status.txt", page)
+            self.extractAuthorInfoAndWriteTofile(page)
+            self.pagesProcessed += 1
+            progress = self.getProgress()
+            print("processed ", progress, "%")
+
+    def processAllPages(self):
+        with open("AllPages.txt") as f:
+            lines = [line.rstrip() for line in f]
+            self.totalPages = len(lines)
+            for page in lines:
+                self.writeToStatusFile("status.txt", page)
+                self.extractAuthorInfoAndWriteTofile(page)
+                self.pagesProcessed += 1
+                progress = self.getProgress()
+                print("processed ", progress, "%")
+
+    def getProgress(self):
+        return self.pagesProcessed * 100/self.totalPages
+
+    def extractAuthorInfoAndWriteTofile(self, page):
+        links = self.getAllArticleVersionsUrlsOnPage(page)
+        citedBy = self.getKnownPublisherUrls(links)
+        if citedBy:
+            for key, value in citedBy.items():
+                if value.Name == "acm":
+                    authors = self.extract_acm_author_info(value.ArticleUrl)
+                    self.writeAuthorsToFile("Authors.csv", authors)
+                if value.Name == "ieee":
+                    authors = self.extract_ieee_author_info(value.ArticleUrl)
+                    self.writeAuthorsToFile("Authors.csv", authors)
+                if value.Name == "springer":
+                    authors = self.extract_springer_author_info(value.ArticleUrl)
+                    self.writeAuthorsToFile("Authors.csv", authors)
+
+    def writeAllPagesToFile(self, filename, listPages):
+        print("writing to file: ", filename)
+        with open(filename, 'w', encoding="utf-8") as the_file:
+            for page in listPages:
+                print(page)
+                the_file.write(page+"\n")
+
+    def writeAuthorsToFile(self, filename, authors):
+        print("writing authors to file: ", filename)
+        with open(filename, 'a', encoding="utf-8") as the_file:
+            for author in authors:
+                row = author.Name + "|" + author.Affiliation + "\n"
+                print(row)
+                the_file.write(row)
+
+    def createAuthorsFile(self, filename):
+        with open(filename, 'w', encoding="utf-8") as the_file:
+            row = "Name" + "|" + "Affiliation" + "\n"
+            print(row)
+            the_file.write(row)
+
+    def writeToStatusFile(self, filename, page):
+        with open(filename, 'a+', encoding="utf-8") as the_file:
+            print("Status: processing page", self.pagesProcessed, page)
+            the_file.write(page + "\n")
+
 if __name__ == "__main__":
     c = Crawler({})
-    #c.testProxy()
-    #sys.exit()
-    basePages = c.getAllCitedByBaseLinks()
-    allSubsequentLinks = []
-    for page in basePages:
-        newLinks = c.getAllSubsequentPageLinks(page)
-        if newLinks:
-            print ("found more pages: ", len(newLinks))
-            allSubsequentLinks = allSubsequentLinks + newLinks
-
-    allPages = basePages+allSubsequentLinks
-
-    print ("************************************")
-    for page in allPages:
-        print (page)
-   # for author in authors:
-   #     print(author.Name, author.Affiliation)
-    print ("total pages to scan", len(allPages))
+    #c.start()
+    c.processAllPages()
+    #c.getAllSubsequentPageLinks("https://scholar.google.com/scholar?oi=bibs&hl=en&cites=8312375644033733127")
+    #c.createAuthorsFile("Authors.csv")
+    #c.extractAuthorInfoAndWriteTofile("https://scholar.google.com/scholar?oi=bibs&hl=en&cites=5074073977992802576")
     print("finished!")
