@@ -158,6 +158,7 @@ class Crawler:
         return authors
 
     def getAllArticleVersionsUrlsOnPage(self, url):
+        print("Getting All Article Versions for", url)
         page = self.getPage(url)
         root = html.fromstring(page.content)
         links = []
@@ -168,29 +169,35 @@ class Crawler:
                 link = self.getScholarPageLink(link)
                 links.append(link)
 
+        print("number of article versions found", len(links))
         return links
 
     def getKnownPublisherUrls(self, urls):
+        print("inside getKnownPublisherUrls")
         citedBy = {}
         for url in urls:
+            print("Getting known publisher for ", url)
             page = self.getPage(url)
             root = html.fromstring(page.content)
             anchors = root.xpath(".//a")
             for anchor in anchors:
                 link = anchor.get("href")
                 if "https://dl.acm.org/doi/abs" in link:
+                    print("found acm publisher")
                     publisher = Publisher()
                     publisher.Name = "acm"
                     publisher.ArticleUrl = link
                     citedBy[url] = publisher
                     break
                 if "https://ieeexplore.ieee.org/" in link:
+                    print("found ieee publisher")
                     publisher = Publisher()
                     publisher.Name = "ieee"
                     publisher.ArticleUrl = link
                     citedBy[url] = publisher
                     break
                 if "https://link.springer.com" in link:
+                    print("found springer publisher")
                     publisher = Publisher()
                     publisher.Name = "springer"
                     publisher.ArticleUrl = link
@@ -216,7 +223,7 @@ class Crawler:
 
         print("Getting base pages from profile link")
         basePages = self.getAllCitedByBaseLinks()
-        print("Number of base pages found ", len (basePages))
+        print("Number of base pages found ", len(basePages))
 
         print("getting subsequent pages from every base page")
         allSubsequentLinks = []
@@ -250,6 +257,26 @@ class Crawler:
                 self.pagesProcessed += 1
                 progress = self.getProgress()
                 print("processed ", progress, "%")
+
+    def processAllSubsequentPageLinks(self, page):
+        nextPage = page
+        while nextPage:
+            self.writeToStatusFile("status.txt", nextPage)
+            self.extractAuthorInfoAndWriteTofile(nextPage)
+            nextPage = self.getNextCitedByLink(nextPage)
+            if nextPage:
+                print("found: ", nextPage)
+
+    def start2(self):
+        print("creating authors file")
+        self.createAuthorsFile("Authors.csv")
+        print("Getting base pages from profile link")
+        basePages = self.getAllCitedByBaseLinks()
+        print("Number of base pages found ", len(basePages))
+        print("getting subsequent pages from every base page")
+        for page in basePages:
+            self.processAllSubsequentPageLinks(page)
+            print("processed all child pages of", page)
 
     def getProgress(self):
         return self.pagesProcessed * 100/self.totalPages
@@ -298,7 +325,7 @@ class Crawler:
 if __name__ == "__main__":
     c = Crawler({})
     #c.start()
-    c.processAllPages()
+    c.start2()
     #c.getAllSubsequentPageLinks("https://scholar.google.com/scholar?oi=bibs&hl=en&cites=8312375644033733127")
     #c.createAuthorsFile("Authors.csv")
     #c.extractAuthorInfoAndWriteTofile("https://scholar.google.com/scholar?oi=bibs&hl=en&cites=5074073977992802576")
