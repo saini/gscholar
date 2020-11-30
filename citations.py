@@ -91,33 +91,39 @@ class Crawler:
         return self.baseUrl + inputLink
 
     def extractAuthorAffiliation(self, authorLink):
+        print ("extracting author affiliation")
         (element, attribute, url, pos) = authorLink
         userLink = self.baseUrl + url
         page = requests.get(userLink)
         tree = html.fromstring(page.content)
 
     def extract_acm_author_info(self, url):
+        print("extracting acm author, ", url)
         page = self.getPage(url)
         tree = html.fromstring(page.content)
         elements = tree.xpath("//div[contains(@class, 'auth-info')]")
         authors = []
         for element in elements:
-            spans = element.xpath(".//span")
-            author = Author()
-            for span in spans:
-                anchors = span.xpath(".//a")
+            try:
+                spans = element.xpath(".//span")
+                author = Author()
+                for span in spans:
+                    anchors = span.xpath(".//a")
 
-                for anchor in anchors:
-                    #print(anchor.text)
-                    author.Name = anchor.text.strip()
-                if len(span.text.strip()) > 0:
-                    #print(span.text.strip())
-                    author.Affiliation = span.text.strip()
-                    authors.append(author)
+                    for anchor in anchors:
+                        #print(anchor.text)
+                        author.Name = anchor.text.strip()
+                    if len(span.text.strip()) > 0:
+                        #print(span.text.strip())
+                        author.Affiliation = span.text.strip()
+                        authors.append(author)
+            except:
+                print("Unexpected error:", sys.exc_info()[0])
 
         return authors
 
     def extract_ieee_author_info(self, url):
+        print("extracting ieee author, ", url)
         url = url + "/authors#authors"
         page = self.getPage(url)
         endString = ';\n\n\n\n\txplGlobal.document.snippet="true"'
@@ -130,13 +136,17 @@ class Crawler:
         authors = metadict["authors"]
         authorList = []
         for author in authors:
-            a = Author()
-            a.Name = author['name']
-            a.Affiliation = author['affiliation'][0]
-            authorList.append(a)
+            try:
+                a = Author()
+                a.Name = author['name']
+                a.Affiliation = author['affiliation'][0]
+                authorList.append(a)
+            except:
+                print("Unexpected error:", sys.exc_info()[0])
         return authorList
 
     def extract_springer_author_info(self, url):
+        print("extracting springer author, ", url)
         page = self.getPage(url)
         tree = html.fromstring(page.content)
         authorNames = tree.xpath("//span[contains(@class, 'authors-affiliations__name')]")
@@ -146,14 +156,17 @@ class Crawler:
         authors = []
         index = 0
         for authorName in authorNames:
-            author = Author()
-            author.Name = authorName.text
-            affiliation = affiliations[index]
-            city = cities[index]
-            country = countries[index]
-            author.Affiliation = affiliation.text+", " + city.text+", "+ country.text
-            index = index + 1
-            authors.append(author)
+            try:
+                author = Author()
+                author.Name = authorName.text
+                affiliation = affiliations[index]
+                city = cities[index]
+                country = countries[index]
+                author.Affiliation = affiliation.text+", " + city.text+", "+ country.text
+                index = index + 1
+                authors.append(author)
+            except:
+                print("exception while processing ")
 
         return authors
 
@@ -261,22 +274,27 @@ class Crawler:
     def processAllSubsequentPageLinks(self, page):
         nextPage = page
         while nextPage:
-            self.writeToStatusFile("status.txt", nextPage)
             self.extractAuthorInfoAndWriteTofile(nextPage)
+            self.writeToStatusFile("status.txt", nextPage)
+            self.pagesProcessed += 1
             nextPage = self.getNextCitedByLink(nextPage)
             if nextPage:
                 print("found: ", nextPage)
 
-    def start2(self):
+    def start2(self, pageIndex):
         print("creating authors file")
-        self.createAuthorsFile("Authors.csv")
+        self.AuthorsFile = "Authors-{pi}.csv".format(pi=pageIndex)
+        self.createAuthorsFile(self.AuthorsFile)
         print("Getting base pages from profile link")
         basePages = self.getAllCitedByBaseLinks()
         print("Number of base pages found ", len(basePages))
         print("getting subsequent pages from every base page")
+        count = 0
         for page in basePages:
-            self.processAllSubsequentPageLinks(page)
-            print("processed all child pages of", page)
+            if count == pageIndex:
+                self.processAllSubsequentPageLinks(page)
+                print("processed all child pages of", page)
+            count +=1
 
     def getProgress(self):
         return self.pagesProcessed * 100/self.totalPages
@@ -288,13 +306,13 @@ class Crawler:
             for key, value in citedBy.items():
                 if value.Name == "acm":
                     authors = self.extract_acm_author_info(value.ArticleUrl)
-                    self.writeAuthorsToFile("Authors.csv", authors)
+                    self.writeAuthorsToFile(self.AuthorsFile, authors)
                 if value.Name == "ieee":
                     authors = self.extract_ieee_author_info(value.ArticleUrl)
-                    self.writeAuthorsToFile("Authors.csv", authors)
+                    self.writeAuthorsToFile(self.AuthorsFile, authors)
                 if value.Name == "springer":
                     authors = self.extract_springer_author_info(value.ArticleUrl)
-                    self.writeAuthorsToFile("Authors.csv", authors)
+                    self.writeAuthorsToFile(self.AuthorsFile, authors)
 
     def writeAllPagesToFile(self, filename, listPages):
         print("writing to file: ", filename)
@@ -325,7 +343,8 @@ class Crawler:
 if __name__ == "__main__":
     c = Crawler({})
     #c.start()
-    c.start2()
+    pageIndex = 5
+    c.start2(pageIndex)
     #c.getAllSubsequentPageLinks("https://scholar.google.com/scholar?oi=bibs&hl=en&cites=8312375644033733127")
     #c.createAuthorsFile("Authors.csv")
     #c.extractAuthorInfoAndWriteTofile("https://scholar.google.com/scholar?oi=bibs&hl=en&cites=5074073977992802576")
