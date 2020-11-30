@@ -343,9 +343,10 @@ class Crawler:
 if __name__ == "__main__":
     c = Crawler({})
     #c.start()
-    pageIndex = 5
-    c.start2(pageIndex)
-    #c.getAllSubsequentPageLinks("https://scholar.google.com/scholar?oi=bibs&hl=en&cites=8312375644033733127")
-    #c.createAuthorsFile("Authors.csv")
-    #c.extractAuthorInfoAndWriteTofile("https://scholar.google.com/scholar?oi=bibs&hl=en&cites=5074073977992802576")
-    print("finished!")
+    if len(sys.argv) == 2:
+        pageIndex = int(sys.argv[1])
+        c.start2(pageIndex)
+        #c.getAllSubsequentPageLinks("https://scholar.google.com/scholar?oi=bibs&hl=en&cites=8312375644033733127")
+        #c.createAuthorsFile("Authors.csv")
+        #c.extractAuthorInfoAndWriteTofile("https://scholar.google.com/scholar?oi=bibs&hl=en&cites=5074073977992802576")
+        print("finished!")
