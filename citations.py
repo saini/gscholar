@@ -8,6 +8,7 @@ import logging
 import sys
 import time
 import random
+from fake_useragent import UserAgent
 
 
 class Author:
@@ -24,9 +25,11 @@ class Crawler:
     def __init__(self, config):
         self.config = config
         self.baseUrl = "https://scholar.google.com"
-        self.headers = {"User-Agent":"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.82 Safari/537.36"}
+        self.headers = {"User-Agent": UserAgent().random}
         self.pagesProcessed = 0
         self.totalPages = 0
+        self.session = requests.Session()
+        self.requestCount =0
 
     def crawl(self):
         page = requests.get('https://scholar.google.com/scholar?oi=bibs&hl=en&cites=1629517509046821994')
@@ -196,11 +199,16 @@ class Crawler:
         return citedBy
 
     def getPage(self, url):
-        sleepFor = random.randint(2,7)
+        sleepFor = random.randint(5,15)
         print("sleeping for ", sleepFor, "seconds")
         time.sleep(sleepFor)
-        page = requests.get(url, headers=self.headers)
-        return page
+        if self.requestCount % 5 ==0:
+            self.headers = {"User-Agent": UserAgent().random}
+        response = self.session.get(url, headers=self.headers)
+        print("received response with code: ", response.status_code)
+        response.raise_for_status()
+        self.requestCount += 1
+        return response
 
     def start(self):
         print("creating authors file")
@@ -232,6 +240,7 @@ class Crawler:
             print("processed ", progress, "%")
 
     def processAllPages(self):
+        self.createAuthorsFile("Authors.csv")
         with open("AllPages.txt") as f:
             lines = [line.rstrip() for line in f]
             self.totalPages = len(lines)
